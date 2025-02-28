@@ -1,6 +1,6 @@
 import { Avatar } from "./BlogCard";
 
-export function FullBlogCard({ Author, title, content, Date, id }: any) {
+export function FullBlogCard({ Author, title, content, Date }: any) {
     return <div className="grid grid-cols-3 max-w-7xl pt-10 gap-7">
         <div className="col-span-2 ">
             <div className="text-3xl font-bold">{title}</div>

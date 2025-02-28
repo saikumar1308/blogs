@@ -29,7 +29,6 @@ export function Blog() {
                 title={blog?.title}
                 content={blog?.content}
                 Date={blog?.time}
-                id={blog?.id}
             />
         </div>
         <footer className="bg-white mb-4 border-t ">
