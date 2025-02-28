@@ -11,7 +11,7 @@ export function AppBar() {
                 </Link>
             </div>
             <div className="text-2xl">
-                <a href="/signin">
+                <a href="/">
                     <Avatar name={"Abhi"} />
                 </a>
             </div>

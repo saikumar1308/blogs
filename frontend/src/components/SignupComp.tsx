@@ -51,7 +51,7 @@ export function SignupComp({ type }: { type: 'signup' | 'signin' }) {
                     </div>
                     <div className="flex">
                         <p className="text-sm">{type === "signup" ? "You already have an account?" : "Not a member?"}</p>
-                        <Link to={type === "signup" ? "/signin" : "/signup"} className="text-sm underline pl-2">{type === "signup" ? "Signin" : "Signup"}</Link>
+                        <Link to={type === "signup" ? "/" : "/signup"} className="text-sm underline pl-2">{type === "signup" ? "Signin" : "Signup"}</Link>
                     </div>
                 </div>
             </div>
