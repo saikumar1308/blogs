@@ -23,11 +23,11 @@ export function SignupComp({ type }: { type: 'signup' | 'signin' }) {
         }
     }
 
-    return <div className="h-screen pt-20">
-        <div className="flex justify-self-center flex-col  border w-96 p-6 rounded-lg text-2xl shadow-lg shadow-black bg-white">
+    return <div className="h-screen pt-20 ">
+        <div className="flex justify-self-center flex-col  border w-96 p-6 rounded-lg text-2xl shadow-xl shadow-black bg-white mt-20">
             <div className="flex justify-center">
                 <div className="">
-                    <div className="justify-center flex font-serif text-5xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-violet-500 pb-2">
+                    <div className="justify-center flex font-serif text-5xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-green-600 to-cyan-500 pb-2">
                         <h1>{type === 'signup' ? "Signup" : "Signin"}</h1>
                     </div>
                     <div className=" p-3">
@@ -47,7 +47,7 @@ export function SignupComp({ type }: { type: 'signup' | 'signin' }) {
                         }} />
                     </div>
                     <div className="p-3">
-                        <button type="submit" className="border border-blue-900 p-1 pl-3 pr-3 rounded bg-blue-600" onClick={sendRequest} >{type === "signup" ? "Signup" : "Signin"}</button>
+                        <button type="submit" className="border border-green-900 p-1 pl-3 pr-3 rounded-xl bg-green-600 text-white ml-20 font-semibold" onClick={sendRequest} >Submit</button>
                     </div>
                     <div className="flex">
                         <p className="text-sm">{type === "signup" ? "You already have an account?" : "Not a member?"}</p>
