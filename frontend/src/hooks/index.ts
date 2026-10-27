@@ -7,8 +7,9 @@ interface Blog {
     "title": string,
     "content": string,
     "time": string,
-    "author":{
-        "name":string,
+    "authorId"?: string,
+    "author": {
+        "name": string,
     }
 }
 
@@ -16,32 +17,39 @@ export function useBlogs() {
     const [loading, setLoading] = useState(true)
     const [blogs, setBlogs] = useState<Blog[]>([]);
 
-    useEffect(()=>{
-        axios.get(`${BACKEND_URL}/api/v1/blog/bulk`,{
-            headers:{
+    useEffect(() => {
+        axios.get(`${BACKEND_URL}/api/v1/blog/bulk`, {
+            headers: {
                 Authorization: localStorage.getItem("token")
             }
-        }).then(responce => {
-            setBlogs(responce.data.blogs)
+        }).then(response => {
+            setBlogs(response.data.blogs || [])
+            setLoading(false)
+        }).catch(() => {
             setLoading(false)
         })
-    },[])
-    return {blogs,loading}
+    }, [])
+
+    return { blogs, setBlogs, loading }
 }
 
-export function useBlog ({id}:{id:string}){
+export function useBlog ({ id }: { id: string }) {
     const [loading, setLoading] = useState(true)
     const [blog, setBlog] = useState<Blog>();
 
-    useEffect(()=>{
-        axios.get(`${BACKEND_URL}/api/v1/blog/${id}`,{
-            headers:{
+    useEffect(() => {
+        if (!id) return;
+        axios.get(`${BACKEND_URL}/api/v1/blog/${id}`, {
+            headers: {
                 Authorization: localStorage.getItem("token")
             }
-        }).then(responce => {
-            setBlog(responce.data.blog)
+        }).then(response => {
+            setBlog(response.data.blog)
+            setLoading(false)
+        }).catch(() => {
             setLoading(false)
         })
-    },[id])
-    return {blog,loading}
+    }, [id])
+
+    return { blog, loading }
 }

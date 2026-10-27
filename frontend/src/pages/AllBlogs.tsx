@@ -1,46 +1,145 @@
+import { useState, useMemo } from "react";
 import { AppBar } from "../components/AppBar";
-import { BlogCard } from "../components/BlogCard";
+import { BlogCard, BlogCardSkeleton } from "../components/BlogCard";
 import { useBlogs } from "../hooks";
+import { Search, Sparkles, Layers, PenLine } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useToast } from "../context/ToastContext";
+import axios from "axios";
+import { BACKEND_URL } from "../config";
 
 export function AllBlogs() {
-    const { blogs, loading } = useBlogs()
-    if (loading) {
-        return <>
+    const { blogs, loading, setBlogs } = useBlogs();
+    const { showToast } = useToast();
+    const [searchQuery, setSearchQuery] = useState("");
+    const [selectedTag, setSelectedTag] = useState("All");
+
+    const tags = ["All", "Tech", "Design", "AI", "Startup", "Personal"];
+
+    const filteredBlogs = useMemo(() => {
+        return blogs.filter((blog) => {
+            const matchesSearch =
+                blog.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                blog.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                blog.author.name.toLowerCase().includes(searchQuery.toLowerCase());
+            return matchesSearch;
+        });
+    }, [blogs, searchQuery]);
+
+    const handleDeleteBlog = async (id: string) => {
+        try {
+            await axios.delete(`${BACKEND_URL}/api/v1/blog/${id}`, {
+                headers: { Authorization: localStorage.getItem("token") }
+            });
+            setBlogs((prev) => prev.filter((b) => b.id !== id));
+            showToast("Blog post deleted successfully", "success");
+        } catch {
+            showToast("Failed to delete post", "error");
+        }
+    };
+
+    return (
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
             <AppBar />
-            <div role="status" className="flex justify-center">
-                <div className="mt-48">
-                    <div className="">
-                        <svg aria-hidden="true" className="w-8 h-8 text-gray-200 animate-spin dark:text-gray-600 fill-blue-600" viewBox="0 0 100 101" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M100 50.5908C100 78.2051 77.6142 100.591 50 100.591C22.3858 100.591 0 78.2051 0 50.5908C0 22.9766 22.3858 0.59082 50 0.59082C77.6142 0.59082 100 22.9766 100 50.5908ZM9.08144 50.5908C9.08144 73.1895 27.4013 91.5094 50 91.5094C72.5987 91.5094 90.9186 73.1895 90.9186 50.5908C90.9186 27.9921 72.5987 9.67226 50 9.67226C27.4013 9.67226 9.08144 27.9921 9.08144 50.5908Z" fill="currentColor" /><path d="M93.9676 39.0409C96.393 38.4038 97.8624 35.9116 97.0079 33.5539C95.2932 28.8227 92.871 24.3692 89.8167 20.348C85.8452 15.1192 80.8826 10.7238 75.2124 7.41289C69.5422 4.10194 63.2754 1.94025 56.7698 1.05124C51.7666 0.367541 46.6976 0.446843 41.7345 1.27873C39.2613 1.69328 37.813 4.19778 38.4501 6.62326C39.0873 9.04874 41.5694 10.4717 44.0505 10.1071C47.8511 9.54855 51.7191 9.52689 55.5402 10.0491C60.8642 10.7766 65.9928 12.5457 70.6331 15.2552C75.2735 17.9648 79.3347 21.5619 82.5849 25.841C84.9175 28.9121 86.7997 32.2913 88.1811 35.8758C89.083 38.2158 91.5421 39.6781 93.9676 39.0409Z" fill="currentFill" /></svg>
-                        <span className="sr-only">Loading...</span>
+
+            {/* Hero Section */}
+            <section className="relative overflow-hidden border-b border-slate-200/80 dark:border-slate-800 bg-white/50 dark:bg-slate-900/40 backdrop-blur-sm py-12 sm:py-16">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+                    <div className="max-w-3xl">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 mb-4">
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>The Modern Publishing Platform</span>
+                        </div>
+                        <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-tight">
+                            Explore perspectives, code stories & ideas.
+                        </h1>
+                        <p className="mt-4 text-base sm:text-lg text-slate-600 dark:text-slate-400">
+                            Discover thoughtfully crafted articles from engineers, designers, and creators worldwide.
+                        </p>
+                    </div>
+
+                    {/* Search & Tag row */}
+                    <div className="mt-8 flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-between">
+                        <div className="relative max-w-md w-full">
+                            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Search articles by title, topic, or author..."
+                                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all placeholder:text-slate-400 shadow-sm"
+                            />
+                        </div>
+
+                        {/* Category filter pills */}
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                            {tags.map((tag) => (
+                                <button
+                                    key={tag}
+                                    onClick={() => setSelectedTag(tag)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 ${
+                                        selectedTag === tag
+                                            ? "bg-emerald-600 text-white shadow-sm"
+                                            : "bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                                    }`}
+                                >
+                                    {tag}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
-            </div>
-        </>
-    }
-    return <div className="">
-        <AppBar />
-        <div className="flex justify-center">
-            <div className="mt-4">
-                {blogs.map(blog => (<BlogCard Author={blog.author.name}
-                    id={blog.id}
-                    title={blog.title}
-                    content={blog.content}
-                    Date={blog.time}
-                />))}
-            </div>
+            </section>
+
+            {/* Main feed list */}
+            <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+                {loading ? (
+                    <div className="space-y-6">
+                        <BlogCardSkeleton />
+                        <BlogCardSkeleton />
+                        <BlogCardSkeleton />
+                    </div>
+                ) : filteredBlogs.length === 0 ? (
+                    <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-8 shadow-sm">
+                        <Layers className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-white">No articles found</h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+                            {searchQuery ? `No matches for "${searchQuery}". Try different keywords.` : "Be the first to share your thoughts with the community!"}
+                        </p>
+                        <Link to="/blog">
+                            <button className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md transition-all">
+                                <PenLine className="w-4 h-4" />
+                                Write First Blog
+                            </button>
+                        </Link>
+                    </div>
+                ) : (
+                    <div className="space-y-6">
+                        {filteredBlogs.map((blog) => (
+                            <BlogCard
+                                key={blog.id}
+                                id={blog.id}
+                                Author={blog.author?.name || "Author"}
+                                authorId={blog.authorId}
+                                title={blog.title}
+                                content={blog.content}
+                                Date={blog.time}
+                                onDelete={handleDeleteBlog}
+                            />
+                        ))}
+                    </div>
+                )}
+            </main>
+
+            {/* Footer */}
+            <footer className="mt-20 border-t border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 py-8">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500 dark:text-slate-400">
+                    <p>© 2026 Blogs Platform. Built for developers and storytellers.</p>
+                    <p className="font-medium text-slate-700 dark:text-slate-300">
+                        Crafted with modern full-stack edge tech.
+                    </p>
+                </div>
+            </footer>
         </div>
-
-        <footer className="bg-white mb-4 border-t ">
-            <div className="w-full mx-auto max-w-screen-xl p-4 md:flex md:items-center md:justify-between">
-                <span className="text-sm text-gray-500 sm:text-center ">© 2024 <a href="/blogs" className="hover:underline">Blogs™</a>. All Rights Reserved.
-                </span>
-                <ul className="flex flex-wrap items-center mt-3 text-sm font-medium text-gray-500  sm:mt-0">
-                    <li>
-                        <a href="#" className="hover:underline me-4 md:me-6">Developed by Sai Kumar</a>
-                    </li>
-                </ul>
-            </div>
-        </footer>
-
-    </div>
+    );
 }
