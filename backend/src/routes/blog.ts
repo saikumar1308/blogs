@@ -75,25 +75,91 @@ blogRouter.put('/',async (c) => {
     return c.json({id: blog.id})
 })
 
-// Add pagination
-blogRouter.get('/bulk',async (c) => {
+// Pagination & search
+blogRouter.get('/bulk', async (c) => {
+    const page = parseInt(c.req.query("page") || "1");
+    const limit = parseInt(c.req.query("limit") || "10");
+    const search = c.req.query("q") || "";
+    const skip = (page - 1) * limit;
+
     const prisma = new PrismaClient({
         datasourceUrl: c.env.DATABASE_URL
     }).$extends(withAccelerate())
-    const blogs = await prisma.blog.findMany({
-        select:{
-            id:true,
-            title:true,
-            content:true,
-            time:true,
-            author:{
-                select:{
-                    name:true,
+
+    const whereClause: any = {};
+    if (search.trim()) {
+        whereClause.OR = [
+            { title: { contains: search, mode: 'insensitive' } },
+            { content: { contains: search, mode: 'insensitive' } }
+        ];
+    }
+
+    const [blogs, total] = await Promise.all([
+        prisma.blog.findMany({
+            where: whereClause,
+            skip: skip,
+            take: limit,
+            orderBy: {
+                time: 'desc'
+            },
+            select: {
+                id: true,
+                title: true,
+                content: true,
+                time: true,
+                authorId: true,
+                author: {
+                    select: {
+                        name: true,
+                    }
                 }
             }
+        }),
+        prisma.blog.count({ where: whereClause })
+    ]);
+
+    return c.json({
+        blogs,
+        pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit)
         }
     })
-    return c.json({blogs})
+})
+
+blogRouter.delete('/:id', async (c) => {
+    const id = c.req.param("id")
+    const authorId = c.get("userId")
+    const prisma = new PrismaClient({
+        datasourceUrl: c.env.DATABASE_URL
+    }).$extends(withAccelerate())
+
+    try {
+        const existing = await prisma.blog.findUnique({
+            where: { id }
+        });
+
+        if (!existing) {
+            c.status(404);
+            return c.json({ error: "Blog not found" });
+        }
+
+        if (existing.authorId !== authorId) {
+            c.status(403);
+            return c.json({ error: "You are not authorized to delete this blog" });
+        }
+
+        await prisma.blog.delete({
+            where: { id }
+        });
+
+        return c.json({ message: "Blog deleted successfully" });
+    } catch {
+        c.status(500);
+        return c.json({ error: "Failed to delete blog post" });
+    }
 })
 
 blogRouter.get('/:id',async (c) => {
@@ -112,6 +178,7 @@ blogRouter.get('/:id',async (c) => {
                 title:true,
                 content:true,
                 time:true,
+                authorId: true,
                 author:{
                     select:{
                         name:true,
@@ -126,5 +193,4 @@ blogRouter.get('/:id',async (c) => {
             message: "Error while fetching blog post"
         })
     }
-    
 })
