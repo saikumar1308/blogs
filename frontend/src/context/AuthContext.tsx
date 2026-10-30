@@ -1,17 +1,17 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
-import { BACKEND_URL } from '../config';
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { api, UNAUTHORIZED_EVENT } from "../lib/api";
+import type { AuthUser } from "../types";
 
-interface User {
-    id: string;
+interface LoginUser {
+    id?: string;
     name: string;
 }
 
 interface AuthContextType {
-    user: User | null;
+    user: AuthUser | null;
     token: string | null;
     loading: boolean;
-    login: (token: string, name?: string) => void;
+    login: (token: string, user?: LoginUser) => void;
     logout: () => void;
     refreshUser: () => Promise<void>;
 }
@@ -26,56 +26,74 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
-    const [user, setUser] = useState<User | null>(() => {
-        const cached = localStorage.getItem('user_name');
-        return cached ? { id: '', name: cached } : null;
+    const [token, setToken] = useState<string | null>(() => localStorage.getItem("token"));
+    const [user, setUser] = useState<AuthUser | null>(() => {
+        const cached = localStorage.getItem("user_name");
+        return cached ? { id: "", name: cached } : null;
     });
     const [loading, setLoading] = useState(true);
 
-    const refreshUser = async () => {
-        const currentToken = localStorage.getItem('token');
+    const clearSession = useCallback(() => {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user_name");
+        setToken(null);
+        setUser(null);
+    }, []);
+
+    const refreshUser = useCallback(async () => {
+        const currentToken = localStorage.getItem("token");
+
         if (!currentToken) {
             setUser(null);
+            setToken(null);
             setLoading(false);
             return;
         }
 
         try {
-            const res = await axios.get(`${BACKEND_URL}/api/v1/user/me`, {
-                headers: { Authorization: currentToken }
-            });
-            if (res.data?.user) {
-                setUser(res.data.user);
-                localStorage.setItem('user_name', res.data.user.name);
+            const response = await api.get<{ user: AuthUser }>("/api/v1/user/me");
+            if (response.data?.user) {
+                setUser(response.data.user);
+                localStorage.setItem("user_name", response.data.user.name);
             }
         } catch {
-            // If token invalid, keep cached or clear gracefully
+            // The API interceptor handles 401s. For network errors, keep the cached
+            // name so the UI still renders rather than flashing a signed-out state.
         } finally {
             setLoading(false);
         }
-    };
-
-    useEffect(() => {
-        refreshUser();
     }, []);
 
-    const login = (newToken: string, name?: string) => {
-        localStorage.setItem('token', newToken);
-        if (name) {
-            localStorage.setItem('user_name', name);
-            setUser({ id: '', name });
-        }
-        setToken(newToken);
-        refreshUser();
-    };
+    useEffect(() => {
+        void refreshUser();
+    }, [refreshUser]);
 
-    const logout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user_name');
-        setToken(null);
-        setUser(null);
-    };
+    useEffect(() => {
+        const handleUnauthorized = () => {
+            clearSession();
+        };
+
+        window.addEventListener(UNAUTHORIZED_EVENT, handleUnauthorized);
+        return () => window.removeEventListener(UNAUTHORIZED_EVENT, handleUnauthorized);
+    }, [clearSession]);
+
+    const login = useCallback(
+        (newToken: string, newUser?: LoginUser) => {
+            localStorage.setItem("token", newToken);
+            if (newUser?.name) {
+                localStorage.setItem("user_name", newUser.name);
+                setUser({ id: newUser.id ?? "", name: newUser.name });
+            }
+            setToken(newToken);
+            void refreshUser();
+        },
+        [refreshUser]
+    );
+
+    const logout = useCallback(() => {
+        clearSession();
+        setLoading(false);
+    }, [clearSession]);
 
     return (
         <AuthContext.Provider value={{ user, token, loading, login, logout, refreshUser }}>

@@ -30,10 +30,21 @@ export async function hashPassword(password: string): Promise<string> {
     return `${saltHex}:${hashHex}`;
 }
 
+function timingSafeEqual(a: string, b: string): boolean {
+    if (a.length !== b.length) return false;
+
+    let diff = 0;
+    for (let index = 0; index < a.length; index += 1) {
+        diff |= a.charCodeAt(index) ^ b.charCodeAt(index);
+    }
+
+    return diff === 0;
+}
+
 export async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
     // Legacy support for plain-text passwords during migration
     if (!storedHash.includes(':')) {
-        return password === storedHash;
+        return timingSafeEqual(password, storedHash);
     }
 
     const [saltHex, originalHashHex] = storedHash.split(':');
@@ -66,5 +77,5 @@ export async function verifyPassword(password: string, storedHash: string): Prom
     const hashArray = Array.from(new Uint8Array(derivedBits));
     const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
-    return hashHex === originalHashHex;
+    return timingSafeEqual(hashHex, originalHashHex);
 }

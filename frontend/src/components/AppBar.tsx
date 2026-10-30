@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { PenSquare, LogOut, Sun, Moon, Sparkles, BookOpen } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
+import { Avatar } from "./Avatar";
 
 export function AppBar() {
     const { user, token, logout } = useAuth();
@@ -22,7 +23,6 @@ export function AppBar() {
     }, []);
 
     const displayName = user?.name || "Writer";
-    const initial = displayName.charAt(0).toUpperCase();
 
     const handleLogout = () => {
         logout();
@@ -50,7 +50,7 @@ export function AppBar() {
                         {/* Theme Toggle Button */}
                         <button
                             onClick={toggleTheme}
-                            aria-label="Toggle theme"
+                            aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
                             className="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
                         >
                             {theme === 'dark' ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-600" />}
@@ -58,22 +58,24 @@ export function AppBar() {
 
                         {token ? (
                             <>
-                                <Link to="/blog">
-                                    <button className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-md shadow-emerald-500/20 hover:shadow-lg hover:shadow-emerald-500/30 transition-all hover:-translate-y-0.5 active:translate-y-0">
-                                        <PenSquare className="w-4 h-4" />
-                                        <span className="hidden sm:inline">Write Blog</span>
-                                    </button>
+                                <Link
+                                    to="/blog"
+                                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-md shadow-emerald-500/20 hover:shadow-lg hover:shadow-emerald-500/30 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                                >
+                                    <PenSquare className="w-4 h-4" />
+                                    <span className="hidden sm:inline">Write Blog</span>
                                 </Link>
 
                                 {/* User Dropdown */}
                                 <div className="relative" ref={dropdownRef}>
                                     <button
                                         onClick={() => setDropdownOpen(!dropdownOpen)}
-                                        className="flex items-center gap-2 p-1 rounded-full ring-2 ring-transparent hover:ring-emerald-500/40 transition-all focus:outline-none"
+                                        aria-label="Open account menu"
+                                        aria-haspopup="menu"
+                                        aria-expanded={dropdownOpen}
+                                        className="flex items-center gap-2 p-1 rounded-full ring-2 ring-transparent hover:ring-emerald-500/40 transition-all focus:outline-none focus-visible:ring-emerald-500/60"
                                     >
-                                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-white font-semibold text-sm shadow-sm">
-                                            {initial}
-                                        </div>
+                                        <Avatar name={displayName} />
                                     </button>
 
                                     {dropdownOpen && (
@@ -127,20 +129,5 @@ export function AppBar() {
                 </div>
             </div>
         </header>
-    );
-}
-
-export function Avatar({ name, size = "md" }: { name: string; size?: "sm" | "md" | "lg" }) {
-    const initial = (name && name[0] ? name[0] : "U").toUpperCase();
-    const sizeClasses = {
-        sm: "w-7 h-7 text-xs",
-        md: "w-9 h-9 text-sm",
-        lg: "w-12 h-12 text-base font-semibold",
-    }[size];
-
-    return (
-        <div className={`relative inline-flex items-center justify-center ${sizeClasses} rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-medium shadow-sm shrink-0`}>
-            <span>{initial}</span>
-        </div>
     );
 }

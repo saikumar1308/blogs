@@ -7,12 +7,14 @@
   "dependencies": {
     "@prisma/client": "^6.1.0",
     "@prisma/extension-accelerate": "^1.2.1",
-    "@saikumar1308/common-blogs": "^1.0.0",
+    "@saikumar1308/common-blogs": "file:../common",
     "hono": "^4.6.15",
-    "prisma": "^6.1.0"
+    "prisma": "^6.1.0",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241218.0",
+    "typescript": "~5.6.2",
     "wrangler": "^3.96.0"
   }
 }

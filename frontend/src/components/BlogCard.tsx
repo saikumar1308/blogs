@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Clock, Calendar, ArrowRight, Trash2 } from "lucide-react";
-import { Avatar } from "./AppBar";
+import { Clock, Calendar, ArrowRight, Trash2, Loader2 } from "lucide-react";
+import { Avatar } from "./Avatar";
 import { useAuth } from "../context/AuthContext";
+import { displayTag } from "../constants";
 
 interface BlogCardProps {
     id: string;
@@ -10,29 +12,65 @@ interface BlogCardProps {
     Author: string;
     authorId?: string;
     Date: string;
-    onDelete?: (id: string) => void;
+    updatedAt?: string;
+    tags?: string[];
+    onDelete?: (id: string) => Promise<void> | void;
 }
 
-export function BlogCard({ Author, title, content, Date: dateStr, id, authorId, onDelete }: BlogCardProps) {
+function formatDate(dateStr: string) {
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+
+    if (Number.isNaN(date.getTime())) {
+        return dateStr.slice(0, 10);
+    }
+
+    return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+    });
+}
+
+function wasEdited(time: string, updatedAt?: string) {
+    if (!updatedAt || !time) return false;
+    const created = new Date(time).getTime();
+    const updated = new Date(updatedAt).getTime();
+    if (Number.isNaN(created) || Number.isNaN(updated)) return false;
+    return updated - created > 60_000;
+}
+
+export function BlogCard({
+    Author,
+    title,
+    content,
+    Date: dateStr,
+    updatedAt,
+    tags = [],
+    id,
+    authorId,
+    onDelete,
+}: BlogCardProps) {
     const { user } = useAuth();
-    const isAuthor = user && (user.name === Author || user.id === authorId);
+    const [deleting, setDeleting] = useState(false);
+    const isAuthor = Boolean(user && (user.id ? user.id === authorId : user.name === Author));
 
-    // Estimate reading time: ~200 words per minute
-    const wordCount = content.trim().split(/\s+/).length;
+    // Estimate reading time: ~180 words per minute.
+    const wordCount = content.trim().split(/\s+/).filter(Boolean).length;
     const readingTime = Math.max(1, Math.ceil(wordCount / 180));
+    const formattedDate = formatDate(dateStr);
 
-    // Format date gracefully
-    const formattedDate = (() => {
+    const handleDelete = async () => {
+        if (!onDelete || deleting) return;
+        if (!window.confirm("Are you sure you want to delete this blog?")) return;
+
+        setDeleting(true);
         try {
-            return new Date(dateStr).toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-            });
-        } catch {
-            return dateStr.slice(0, 10);
+            await onDelete(id);
+        } finally {
+            setDeleting(false);
         }
-    })();
+    };
 
     return (
         <article className="group relative bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 sm:p-7 shadow-sm hover:shadow-xl hover:border-emerald-500/30 dark:hover:border-emerald-500/30 transition-all duration-300 hover:-translate-y-1">
@@ -41,7 +79,7 @@ export function BlogCard({ Author, title, content, Date: dateStr, id, authorId, 
                 <div className="flex items-center gap-3">
                     <Avatar name={Author} size="sm" />
                     <div className="flex items-center gap-2 text-xs sm:text-sm">
-                        <span className="font-semibold text-slate-800 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">
                             {Author}
                         </span>
                         <span className="text-slate-300 dark:text-slate-700">•</span>
@@ -49,22 +87,27 @@ export function BlogCard({ Author, title, content, Date: dateStr, id, authorId, 
                             <Calendar className="w-3.5 h-3.5" />
                             <span>{formattedDate}</span>
                         </div>
+                        {wasEdited(dateStr, updatedAt) && (
+                            <span className="hidden sm:inline text-slate-400 dark:text-slate-500">
+                                · edited
+                            </span>
+                        )}
                     </div>
                 </div>
 
                 {isAuthor && onDelete && (
                     <button
-                        onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (window.confirm("Are you sure you want to delete this blog?")) {
-                                onDelete(id);
-                            }
-                        }}
-                        className="text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                        onClick={handleDelete}
+                        disabled={deleting}
+                        aria-label={`Delete ${title}`}
+                        className="text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-50 transition-colors"
                         title="Delete article"
                     >
-                        <Trash2 className="w-4 h-4" />
+                        {deleting ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <Trash2 className="w-4 h-4" />
+                        )}
                     </button>
                 )}
             </div>
@@ -79,17 +122,26 @@ export function BlogCard({ Author, title, content, Date: dateStr, id, authorId, 
                 </p>
             </Link>
 
+            {/* Tags */}
+            {tags.length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-1.5">
+                    {tags.map((tag) => (
+                        <span
+                            key={tag}
+                            className="px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                        >
+                            {displayTag(tag)}
+                        </span>
+                    ))}
+                </div>
+            )}
+
             {/* Footer row */}
             <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                <div className="flex items-center gap-4">
-                    <span className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md font-medium text-slate-600 dark:text-slate-300">
-                        <Clock className="w-3.5 h-3.5" />
-                        {readingTime} min read
-                    </span>
-                    <span className="hidden sm:inline-block px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 rounded-md font-medium">
-                        Articles
-                    </span>
-                </div>
+                <span className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md font-medium text-slate-600 dark:text-slate-300">
+                    <Clock className="w-3.5 h-3.5" />
+                    {readingTime} min read
+                </span>
 
                 <Link
                     to={`/blog/${id}`}
