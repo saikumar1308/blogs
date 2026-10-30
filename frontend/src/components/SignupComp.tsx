@@ -1,21 +1,30 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Sparkles, ArrowRight, User, KeyRound } from "lucide-react";
+import { Sparkles, ArrowRight, User, KeyRound, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { BACKEND_URL } from "../config";
-import axios from "axios";
+import { usePageMeta } from "../hooks/usePageMeta";
+import { api, getErrorMessage } from "../lib/api";
+import type { AuthUser } from "../types";
 
-export function SignupComp({ type }: { type: 'signup' | 'signin' }) {
+export function SignupComp({ type }: { type: "signup" | "signin" }) {
     const [name, setName] = useState("");
     const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
 
     const navigate = useNavigate();
     const { login } = useAuth();
     const { showToast } = useToast();
 
-    const isSignup = type === 'signup';
+    const isSignup = type === "signup";
+
+    usePageMeta({
+        title: isSignup ? "Create an account" : "Sign in",
+        description: isSignup
+            ? "Join the Blogs community and start sharing your stories."
+            : "Sign in to write, edit, and manage your stories on Blogs.",
+    });
 
     async function sendRequest(e: React.FormEvent) {
         e.preventDefault();
@@ -25,33 +34,35 @@ export function SignupComp({ type }: { type: 'signup' | 'signin' }) {
             return;
         }
 
-        if (password.length < 6) {
-            showToast("Password must be at least 6 characters", "error");
+        if (isSignup && name.trim().length < 3) {
+            showToast("Username must be at least 3 characters", "error");
+            return;
+        }
+
+        if (isSignup && password.length < 8) {
+            showToast("Password must be at least 8 characters", "error");
             return;
         }
 
         setLoading(true);
         try {
             const endpoint = isSignup ? "/api/v1/user/signup" : "/api/v1/user/signin";
-            const res = await axios.post(`${BACKEND_URL}${endpoint}`, {
-                name,
+            const response = await api.post<{ token: string; user: AuthUser }>(endpoint, {
+                name: name.trim(),
                 password,
             });
 
-            // Handle both { token, name } or raw token string format
-            const token = res.data?.token || res.data;
-            const userName = res.data?.name || name;
+            const { token, user } = response.data;
 
-            if (token && typeof token === "string") {
-                login(token, userName);
-                showToast(isSignup ? "Account created successfully!" : "Welcome back!", "success");
-                navigate("/blogs");
-            } else {
-                throw new Error("Invalid response format");
+            if (!token || !user?.name) {
+                throw new Error("The server returned an unexpected response");
             }
-        } catch (err: any) {
-            const errorMsg = err.response?.data?.error || err.response?.data?.message || "Authentication failed";
-            showToast(errorMsg, "error");
+
+            login(token, user);
+            showToast(isSignup ? "Account created successfully!" : "Welcome back!", "success");
+            navigate("/blogs");
+        } catch (err) {
+            showToast(getErrorMessage(err, "Authentication failed"), "error");
         } finally {
             setLoading(false);
         }
@@ -66,7 +77,7 @@ export function SignupComp({ type }: { type: 'signup' | 'signin' }) {
             <div className="w-full max-w-md relative z-10">
                 {/* Brand header */}
                 <div className="text-center mb-8">
-                    <Link to="/blogs" className="inline-flex items-center gap-2 mb-3">
+                    <Link to="/blogs" className="inline-flex items-center gap-2 mb-3" aria-label="Blogs home">
                         <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-white shadow-lg shadow-emerald-500/30">
                             <Sparkles className="w-5 h-5" />
                         </div>
@@ -85,37 +96,76 @@ export function SignupComp({ type }: { type: 'signup' | 'signin' }) {
                 <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 shadow-2xl">
                     <form onSubmit={sendRequest} className="space-y-5">
                         <div>
-                            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                            <label
+                                htmlFor="username"
+                                className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2"
+                            >
                                 Username
                             </label>
                             <div className="relative">
                                 <User className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                                 <input
+                                    id="username"
+                                    name="username"
                                     type="text"
                                     value={name}
                                     onChange={(e) => setName(e.target.value)}
                                     placeholder="your_username"
+                                    autoComplete="username"
                                     required
+                                    minLength={isSignup ? 3 : undefined}
+                                    maxLength={32}
                                     className="w-full pl-10 pr-4 py-3 bg-slate-950/60 border border-slate-800 rounded-xl text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/40 transition-all text-sm"
                                 />
                             </div>
+                            {isSignup && (
+                                <p className="mt-1.5 text-xs text-slate-500">
+                                    3–32 characters: letters, numbers, and underscores.
+                                </p>
+                            )}
                         </div>
 
                         <div>
-                            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                            <label
+                                htmlFor="password"
+                                className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2"
+                            >
                                 Password
                             </label>
                             <div className="relative">
                                 <KeyRound className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                                 <input
-                                    type="password"
+                                    id="password"
+                                    name="password"
+                                    type={showPassword ? "text" : "password"}
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     placeholder="••••••••"
+                                    autoComplete={isSignup ? "new-password" : "current-password"}
                                     required
-                                    className="w-full pl-10 pr-4 py-3 bg-slate-950/60 border border-slate-800 rounded-xl text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/40 transition-all text-sm"
+                                    minLength={isSignup ? 8 : undefined}
+                                    maxLength={128}
+                                    aria-describedby={isSignup ? "password-hint" : undefined}
+                                    className="w-full pl-10 pr-12 py-3 bg-slate-950/60 border border-slate-800 rounded-xl text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/40 transition-all text-sm"
                                 />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword((value) => !value)}
+                                    aria-label={showPassword ? "Hide password" : "Show password"}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                                >
+                                    {showPassword ? (
+                                        <EyeOff className="w-4 h-4" />
+                                    ) : (
+                                        <Eye className="w-4 h-4" />
+                                    )}
+                                </button>
                             </div>
+                            {isSignup && (
+                                <p id="password-hint" className="mt-1.5 text-xs text-slate-500">
+                                    At least 8 characters.
+                                </p>
+                            )}
                         </div>
 
                         <button
@@ -123,7 +173,13 @@ export function SignupComp({ type }: { type: 'signup' | 'signin' }) {
                             disabled={loading}
                             className="w-full mt-2 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-lg shadow-emerald-600/30 disabled:opacity-50 transition-all active:scale-[0.99]"
                         >
-                            <span>{loading ? "Authenticating..." : isSignup ? "Create Account" : "Sign In"}</span>
+                            <span>
+                                {loading
+                                    ? "Authenticating..."
+                                    : isSignup
+                                      ? "Create Account"
+                                      : "Sign In"}
+                            </span>
                             {!loading && <ArrowRight className="w-4 h-4" />}
                         </button>
                     </form>
@@ -132,14 +188,20 @@ export function SignupComp({ type }: { type: 'signup' | 'signin' }) {
                         {isSignup ? (
                             <span>
                                 Already have an account?{" "}
-                                <Link to="/signin" className="font-semibold text-emerald-400 hover:text-emerald-300 underline underline-offset-4 ml-1">
+                                <Link
+                                    to="/signin"
+                                    className="font-semibold text-emerald-400 hover:text-emerald-300 underline underline-offset-4 ml-1"
+                                >
                                     Sign In
                                 </Link>
                             </span>
                         ) : (
                             <span>
                                 Don't have an account?{" "}
-                                <Link to="/signup" className="font-semibold text-emerald-400 hover:text-emerald-300 underline underline-offset-4 ml-1">
+                                <Link
+                                    to="/signup"
+                                    className="font-semibold text-emerald-400 hover:text-emerald-300 underline underline-offset-4 ml-1"
+                                >
                                     Sign Up
                                 </Link>
                             </span>
@@ -148,7 +210,10 @@ export function SignupComp({ type }: { type: 'signup' | 'signin' }) {
                 </div>
 
                 <div className="text-center mt-6">
-                    <Link to="/blogs" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+                    <Link
+                        to="/blogs"
+                        className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                    >
                         ← Continue reading as guest
                     </Link>
                 </div>
