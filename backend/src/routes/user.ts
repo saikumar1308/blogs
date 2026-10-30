@@ -1,113 +1,123 @@
 import { Hono } from "hono";
-import { PrismaClient } from '@prisma/client/edge'
-import { withAccelerate } from '@prisma/extension-accelerate'
-import { sign, verify } from 'hono/jwt'
-import { signupInput } from "@saikumar1308/common-blogs";
+import { signupInput, signinInput } from "@saikumar1308/common-blogs";
 import { hashPassword, verifyPassword } from "../crypto";
+import { createToken, extractToken, verifyToken } from "../lib/auth";
+import { apiError } from "../lib/errors";
+import type { AppEnv } from "../lib/env";
+import { getPrisma } from "../lib/prisma";
 
-export const userRouter = new Hono<{
-    Bindings: {
-        DATABASE_URL: string,
-        JWT_SECRET: string,
+export const userRouter = new Hono<AppEnv>();
+
+userRouter.get("/me", async (c) => {
+    const token = extractToken(c.req.header("Authorization"));
+
+    if (!token) {
+        return apiError(c, 401, "UNAUTHORIZED", "Authentication required");
     }
-}>();
 
-userRouter.get('/me', async (c) => {
-    const authHeader = c.req.header("Authorization") || "";
+    let userId: string;
     try {
-        const payload = await verify(authHeader, c.env.JWT_SECRET) as { id: string };
-        if (!payload || !payload.id) {
-            c.status(401);
-            return c.json({ error: "Unauthorized" });
-        }
+        userId = await verifyToken(token, c.env.JWT_SECRET);
+    } catch {
+        return apiError(c, 401, "UNAUTHORIZED", "Invalid or expired token");
+    }
 
-        const prisma = new PrismaClient({
-            datasourceUrl: c.env.DATABASE_URL,
-        }).$extends(withAccelerate());
+    const prisma = getPrisma(c.env);
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, name: true },
+    });
 
-        const user = await prisma.user.findUnique({
-            where: { id: payload.id },
-            select: {
-                id: true,
-                name: true,
-            }
+    if (!user) {
+        return apiError(c, 401, "UNAUTHORIZED", "Account no longer exists");
+    }
+
+    return c.json({ user });
+});
+
+userRouter.post("/signup", async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = signupInput.safeParse(body);
+
+    if (!parsed.success) {
+        return apiError(
+            c,
+            400,
+            "VALIDATION_ERROR",
+            "Please check the form and try again",
+            parsed.error.flatten().fieldErrors
+        );
+    }
+
+    const prisma = getPrisma(c.env);
+
+    try {
+        const hashedPassword = await hashPassword(parsed.data.password);
+        const user = await prisma.user.create({
+            data: {
+                name: parsed.data.name,
+                password: hashedPassword,
+            },
+            select: { id: true, name: true },
         });
 
-        if (!user) {
-            c.status(404);
-            return c.json({ error: "User not found" });
+        const token = await createToken(user.id, c.env.JWT_SECRET);
+        return c.json({ token, user }, 201);
+    } catch (error) {
+        const code = (error as { code?: string })?.code;
+
+        if (code === "P2002") {
+            return apiError(c, 409, "USERNAME_TAKEN", "That username is already taken");
         }
 
-        return c.json({ user });
-    } catch {
-        c.status(401);
-        return c.json({ error: "Invalid token" });
+        console.error("signup failed", error);
+        return apiError(c, 500, "INTERNAL_ERROR", "Could not create your account");
     }
 });
 
-userRouter.post('/signup', async (c) => {
-    const prisma = new PrismaClient({
-        datasourceUrl: c.env.DATABASE_URL,
-    }).$extends(withAccelerate())
+userRouter.post("/signin", async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = signinInput.safeParse(body);
 
-    const body = await c.req.json()
-    const { success } = signupInput.safeParse(body);
-	if (!success) {
-		c.status(400);
-		return c.json({ error: "invalid input" });
-	}
-    try {
-        const hashedPassword = await hashPassword(body.password);
-        const user = await prisma.user.create({
-            data: {
-                name: body.name,
-                password: hashedPassword,
-            }
-        })
-
-        const jwt = await sign({ id: user.id }, c.env.JWT_SECRET)
-        return c.json({ token: jwt, name: user.name })
-    } catch (error) {
-        console.log(error)
-        c.status(411)
-        return c.json({ error: "Username already exists or error occurred" })
+    if (!parsed.success) {
+        return apiError(
+            c,
+            400,
+            "VALIDATION_ERROR",
+            "Please check the form and try again",
+            parsed.error.flatten().fieldErrors
+        );
     }
-})
 
-userRouter.post('/signin', async (c) => {
-    const prisma = new PrismaClient({
-        datasourceUrl: c.env.DATABASE_URL
-    }).$extends(withAccelerate())
+    const prisma = getPrisma(c.env);
 
-    const body = await c.req.json()
-    const { success } = signupInput.safeParse(body);
-	if (!success) {
-		c.status(400);
-		return c.json({ error: "invalid input" });
-	}
     try {
         const user = await prisma.user.findUnique({
-            where: {
-                name: body.name,
-            }
-        })
+            where: { name: parsed.data.name },
+        });
 
         if (!user) {
-            c.status(403)
-            return c.json({ error: "Incorrect credentials" })
+            return apiError(c, 401, "INVALID_CREDENTIALS", "Incorrect username or password");
         }
 
-        const isValid = await verifyPassword(body.password, user.password);
+        const isValid = await verifyPassword(parsed.data.password, user.password);
         if (!isValid) {
-            c.status(403);
-            return c.json({ error: "Incorrect credentials" });
+            return apiError(c, 401, "INVALID_CREDENTIALS", "Incorrect username or password");
         }
 
-        const jwt = await sign({ id: user.id }, c.env.JWT_SECRET)
-        return c.json({ token: jwt, name: user.name })
+        // Transparently upgrade legacy plain-text passwords to PBKDF2 hashes.
+        if (!user.password.includes(":")) {
+            const upgraded = await hashPassword(parsed.data.password);
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { password: upgraded },
+            });
+        }
+
+        const token = await createToken(user.id, c.env.JWT_SECRET);
+        return c.json({ token, user: { id: user.id, name: user.name } });
     } catch (error) {
-        console.log(error)
-        c.status(411)
-        return c.json({ error: "Sign in error" })
+        console.error("signin failed", error);
+        return apiError(c, 500, "INTERNAL_ERROR", "Could not sign you in");
     }
-})
+});
